@@ -1,66 +1,43 @@
 version: 2.1
 
-orbs:
-  sonarcloud: sonarsource/sonarcloud@3.0.1  # official Sonar orb (version may change)
-
 jobs:
-  build-and-test:
-    docker:
-      - image: cimg/node:18.20  # CircleCI Node image; change as needed
-    steps:
-      - checkout
-      - restore_cache:
-          keys:
-            - v1-deps-{{ checksum "package-lock.json" }}
-            - v1-deps-
-      - run:
-          name: Install dependencies
-          command: npm ci
-      - save_cache:
-          paths:
-            - node_modules
-          key: v1-deps-{{ checksum "package-lock.json" }}
-      - run:
-          name: Run tests
-          command: npm test
-      - persist_to_workspace:
-          root: .
-          paths:
-            - .
-
-  sonar-scan:
+  build-and-sonar:
     docker:
       - image: cimg/node:18.20
     steps:
-      - attach_workspace:
-          at: .
       - checkout
+
       - run:
-          name: Install sonar-scanner (CLI)
-          command: |
-            curl -sSLo sonar-scanner-cli.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
-            unzip sonar-scanner-cli.zip -d /tmp
-            export PATH=/tmp/sonar-scanner-4.8.0.2856-linux/bin:$PATH
-            # optional: verify
-            sonar-scanner -v || true
+          name: Install dependencies
+          command: npm ci
+
       - run:
-          name: Run SonarCloud analysis
+          name: Run tests with coverage
+          command: npm test -- --coverage || true
+
+      - run:
+          name: Download Sonar Scanner CLI
           command: |
-            # Ensure SONAR_TOKEN is provided via Context or Project ENV
+            curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
+            unzip sonar-scanner.zip -d /tmp
+            export PATH="/tmp/sonar-scanner-4.8.0.2856-linux/bin:$PATH"
+            sonar-scanner -v
+
+      - run:
+          name: Run Sonar analysis
+          command: |
             export SONAR_TOKEN=${SONAR_TOKEN}
-            # sonar-scanner reads sonar-project.properties
             /tmp/sonar-scanner-4.8.0.2856-linux/bin/sonar-scanner \
-              -Dsonar.login=$SONAR_TOKEN
+              -Dsonar.login=$SONAR_TOKEN \
+              -Dsonar.projectKey=your-org_your-repo \
+              -Dsonar.organization=your-org \
+              -Dsonar.host.url=https://sonarcloud.io \
+              -Dsonar.sources=. \
+              -Dsonar.exclusions=node_modules/**,build/**,dist/**,**/*.test.js,coverage/** \
+              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
 
 workflows:
   version: 2
-  build-test-and-sonar:
+  run-and-analyze:
     jobs:
-      - build-and-test
-      - sonar-scan:
-          requires:
-            - build-and-test
-          filters:
-            branches:
-              only:
-                - main
+      - build-and-sonar
