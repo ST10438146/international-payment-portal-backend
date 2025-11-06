@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  sonarcloud: sonarsource/sonarcloud@1.2.0  # official Sonar orb (version may change)
+  sonarcloud: sonarsource/sonarcloud@3.0.1  # official Sonar orb (version may change)
 
 jobs:
   build-and-test:
