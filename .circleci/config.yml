@@ -1,50 +1,66 @@
 version: 2.1
 
 orbs:
-  node: circleci/node@5.1.0
-  sonarcloud: sonarsource/sonarcloud@2.0.0
+  sonarcloud: sonarsource/sonarcloud@1.2.0  # official Sonar orb (version may change)
 
 jobs:
-  # Backend Testing and Analysis
-  backend-test:
+  build-and-test:
     docker:
-      - image: cimg/node:18.18
-      - image: cimg/mongo:7.0
-    working_directory: ~/project/backend
-    steps:
-      - checkout:
-          path: ~/project
-      - node/install-packages:
-          pkg-manager: npm
-      - run:
-          name: Run Backend Tests
-          command: |
-            echo "Running backend tests..."
-            # Add your test commands here when you have tests
-            # npm test
-      - persist_to_workspace:
-          root: ~/project
-          paths:
-            - backend
- 
-  # SonarQube Scan
-  sonarqube-scan:
-    docker:
-      - image: cimg/node:18.18
-    working_directory: ~/project
+      - image: cimg/node:18.20  # CircleCI Node image; change as needed
     steps:
       - checkout
+      - restore_cache:
+          keys:
+            - v1-deps-{{ checksum "package-lock.json" }}
+            - v1-deps-
+      - run:
+          name: Install dependencies
+          command: npm ci
+      - save_cache:
+          paths:
+            - node_modules
+          key: v1-deps-{{ checksum "package-lock.json" }}
+      - run:
+          name: Run tests
+          command: npm test
+      - persist_to_workspace:
+          root: .
+          paths:
+            - .
+
+  sonar-scan:
+    docker:
+      - image: cimg/node:18.20
+    steps:
       - attach_workspace:
-          at: ~/project
-      - sonarcloud/scan:
-          sonar_token_variable_name: SONAR_TOKEN
+          at: .
+      - checkout
+      - run:
+          name: Install sonar-scanner (CLI)
+          command: |
+            curl -sSLo sonar-scanner-cli.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
+            unzip sonar-scanner-cli.zip -d /tmp
+            export PATH=/tmp/sonar-scanner-4.8.0.2856-linux/bin:$PATH
+            # optional: verify
+            sonar-scanner -v || true
+      - run:
+          name: Run SonarCloud analysis
+          command: |
+            # Ensure SONAR_TOKEN is provided via Context or Project ENV
+            export SONAR_TOKEN=${SONAR_TOKEN}
+            # sonar-scanner reads sonar-project.properties
+            /tmp/sonar-scanner-4.8.0.2856-linux/bin/sonar-scanner \
+              -Dsonar.login=$SONAR_TOKEN
 
 workflows:
   version: 2
-  build-test-scan:
+  build-test-and-sonar:
     jobs:
-      - backend-test
-      - sonarqube-scan:
+      - build-and-test
+      - sonar-scan:
           requires:
-            - backend-test
-          context: sonarcloud
+            - build-and-test
+          filters:
+            branches:
+              only:
+                - main
