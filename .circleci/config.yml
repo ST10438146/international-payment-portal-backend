@@ -1,5 +1,3 @@
-version: 2.1
-
 jobs:
   build-and-sonar:
     docker:
@@ -16,18 +14,18 @@ jobs:
           command: npm test -- --coverage || true
 
       - run:
-          name: Download Sonar Scanner CLI
+          name: Download Sonar Scanner (Java 11 compatible)
           command: |
-            curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.8.0.2856-linux.zip
+            curl -sSLo sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-4.7.0.2747-linux.zip
             unzip sonar-scanner.zip -d /tmp
-            export PATH="/tmp/sonar-scanner-4.8.0.2856-linux/bin:$PATH"
+            export PATH="/tmp/sonar-scanner-4.7.0.2747-linux/bin:$PATH"
             sonar-scanner -v
 
       - run:
           name: Run Sonar analysis
           command: |
             export SONAR_TOKEN=${SONAR_TOKEN}
-            /tmp/sonar-scanner-4.8.0.2856-linux/bin/sonar-scanner \
+            /tmp/sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner \
               -Dsonar.login=$SONAR_TOKEN \
               -Dsonar.projectKey=your-org_your-repo \
               -Dsonar.organization=your-org \
@@ -35,9 +33,3 @@ jobs:
               -Dsonar.sources=. \
               -Dsonar.exclusions=node_modules/**,build/**,dist/**,**/*.test.js,coverage/** \
               -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-
-workflows:
-  version: 2
-  run-and-analyze:
-    jobs:
-      - build-and-sonar
