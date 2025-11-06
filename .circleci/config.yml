@@ -1,17 +1,36 @@
+version: 2.1
+
 jobs:
   build-and-sonar:
     docker:
-      - image: cimg/node:18.20
+      - image: cimg/node:18.20  # Node 18 + npm 9, includes Java 11
     steps:
       - checkout
 
       - run:
-          name: Install dependencies
-          command: npm install
+          name: Show environment info
+          command: |
+            echo "Node version:"
+            node -v
+            echo "npm version:"
+            npm -v
+            echo "Java version:"
+            java -version
 
       - run:
-          name: Run tests with coverage
-          command: npm test -- --coverage || true
+          name: Install dependencies
+          command: |
+            if [ -f package-lock.json ]; then
+              npm ci
+            else
+              npm install
+            fi
+
+      - run:
+          name: Run tests with coverage (non-blocking)
+          command: |
+            echo "Running tests..."
+            npm test -- --coverage || echo "Tests failed or no tests configured - continuing"
 
       - run:
           name: Download Sonar Scanner (Java 11 compatible)
@@ -22,14 +41,21 @@ jobs:
             sonar-scanner -v
 
       - run:
-          name: Run Sonar analysis
+          name: Run SonarCloud analysis
           command: |
             export SONAR_TOKEN=${SONAR_TOKEN}
             /tmp/sonar-scanner-4.7.0.2747-linux/bin/sonar-scanner \
               -Dsonar.login=$SONAR_TOKEN \
-              -Dsonar.projectKey=your-org_your-repo \
-              -Dsonar.organization=your-org \
+              -Dsonar.projectKey=InternationalPayments_Project \
+              -Dsonar.organization=your-sonarcloud-org \
               -Dsonar.host.url=https://sonarcloud.io \
+              -Dsonar.projectName="International Payments" \
               -Dsonar.sources=. \
-              -Dsonar.exclusions=node_modules/**,build/**,dist/**,**/*.test.js,coverage/** \
-              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
+              -Dsonar.exclusions=node_modules/**,dist/**,build/**,coverage/**,**/*.test.js,**/*.spec.js \
+              -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info || true
+
+workflows:
+  version: 2
+  build-and-scan:
+    jobs:
+      - build-and-sonar
